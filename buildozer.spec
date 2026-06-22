@@ -109,7 +109,8 @@ fullscreen = 0
 #android.sdk = 20
 
 # (str) Android NDK version to use
-#android.ndk = '/usr/local/lib/android/sdk/ndk/27.3.13750724'
+#android.ndk = 25c
+ANDROID_NDK = '/usr/local/lib/android/sdk/ndk/27.3.13750724'
 ANDROID_NDK_ROOT = '/usr/local/lib/android/sdk/ndk/27.3.13750724'
 
 # (int) Android NDK API to use. This is the minimum API your app will support, it should usually match android.minapi.
