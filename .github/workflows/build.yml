@@ -44,18 +44,18 @@ jobs:
 
       - name: Build APK
         run: |
-          buildozer android debug 2>&1 | tee build.log
+          set -o pipefail
+          yes | buildozer android debug 2>&1 | tee build.log
         continue-on-error: false
 
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: apk
+          name: calculadora-apk
           path: bin/*.apk
 
       - name: Upload Build Logs
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-logs
