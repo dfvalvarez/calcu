@@ -134,7 +134,7 @@ class PantallaHistorial(Screen):
             font_size=28,
             size_hint=(1, 0.15),
             color=AZUL,
-            bold=True
+            
         )
         layout.add_widget(titulo)
 
