@@ -255,7 +255,7 @@ android.allow_backup = True
 # Python for android (p4a) specific
 #
 
-#p4a.url =
+#p4a.url = https://github.com/kivy/python-for-android.git
 #p4a.fork = kivy
 #p4a.branch = master
 #p4a.commit = HEAD
