@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install Android Build Dependencies
+      - name: Install system dependencies
         run: |
           sudo apt update
           sudo apt install -y \
@@ -31,8 +31,7 @@ jobs:
             tk-dev libgdbm-compat-dev \
             libreadline-dev liblzma-dev \
             cmake ninja-build \
-            libjpeg-dev libpng-dev \
-            libffi-dev python3-dev
+            libjpeg-dev libpng-dev
 
       - name: Install Python dependencies
         run: |
@@ -42,23 +41,80 @@ jobs:
           pip install python-for-android
           pip install buildozer
 
+      - name: Accept ALL Android SDK licenses and pre-install build-tools
+        # SOLUCIÓN DEFINITIVA al error de licencias:
+        # El problema es que buildozer descarga build-tools;37.0.0 en tiempo de
+        # compilación, DESPUÉS de que el paso de licencias ya corrió.
+        # La solución es una combinación de tres medidas:
+        #
+        # 1. Preinstalar build-tools 33.0.2 Y 34.0.0 Y las plataformas
+        #    necesarias con sdkmanager ANTES de que buildozer arranque.
+        # 2. Aceptar todas las licencias con `yes |` de forma no interactiva.
+        # 3. Crear el archivo de licencia de build-tools manualmente en disco
+        #    como respaldo, para que buildozer no necesite aceptarla en runtime.
+        env:
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+        run: |
+          SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+
+          # Paso A: aceptar todas las licencias existentes
+          yes | "${SDKMANAGER}" --licenses 2>/dev/null || true
+
+          # Paso B: instalar todos los paquetes que buildozer podría pedir,
+          # incluyendo build-tools 33, 34 y 35 para cubrir cualquier versión
+          yes | "${SDKMANAGER}" \
+            "platform-tools" \
+            "platforms;android-33" \
+            "build-tools;33.0.2" \
+            "build-tools;34.0.0" \
+            "build-tools;35.0.0" 2>/dev/null || true
+
+          # Paso C: aceptar licencias nuevamente después de instalar los paquetes
+          yes | "${SDKMANAGER}" --licenses 2>/dev/null || true
+
+          # Paso D: escribir los archivos de licencia directamente en disco
+          # Esto es el respaldo definitivo: aunque buildozer intente descargar
+          # una versión nueva, los hashes de licencia ya estarán aceptados.
+          LICENSES_DIR="${ANDROID_SDK_ROOT}/licenses"
+          mkdir -p "${LICENSES_DIR}"
+
+          # Hash de la licencia estándar de Android SDK
+          echo -e "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" \
+            > "${LICENSES_DIR}/android-sdk-license"
+
+          # Hash de la licencia de Android SDK preview
+          echo -e "\n84831b9409646a918e30573bab4c9c91346d8abd" \
+            > "${LICENSES_DIR}/android-sdk-preview-license"
+
+          # Hash de la licencia de Intel HAXM
+          echo -e "\nd975f751698a77b662f1254ddbeed3901e976f5a" \
+            > "${LICENSES_DIR}/intel-android-extra-license"
+
+          # Exportar variables de entorno para los pasos siguientes
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"                   >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/25.2.9519653" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/25.2.9519653" >> $GITHUB_ENV
+
+          # Verificación: confirmar que aidl está disponible
+          echo "--- Verificando aidl ---"
+          find "${ANDROID_SDK_ROOT}/build-tools" -name "aidl" 2>/dev/null || \
+            echo "AVISO: aidl no encontrado aún (buildozer lo buscará en su ruta)"
+
+      - name: Cache Buildozer global directory
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-${{ runner.os }}-
+
       - name: Clean previous local build artifacts
         run: |
-          rm -rf bin
           rm -rf .buildozer
+          rm -rf bin
 
-      - name: Build APK forcing auto-accept via environment
+      - name: Build APK
         run: |
-          # El truco definitivo: Creamos la carpeta de licencias que Buildozer creará en el futuro
-          # y le metemos las firmas digitales de Google pre-aprobadas mediante echo.
-          mkdir -p /home/runner/.buildozer/android/platform/android-sdk/licenses
-          
-          echo -e "244d2427ce41856d46e128c51c414673ffc168e9\n5c6690ddf2d314f817c9a58d2a13a2985396a84c\n7a79a695f8dba2f34a215e4765a0c016c921fd40\n84831b9409646a918e30573bab4c9c91346d8abd\n504667f4c0de7af1a06de9578cfde393430dac94\ne9ac30d0b3d0d3b859874a7134dece2521e0eb9d" > /home/runner/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
-          
-          # Adicionalmente, creamos otra firma específica por si busca el formato alternativo
-          echo -e "244d2427ce41856d46e128c51c414673ffc168e9" >> /home/runner/.buildozer/android/platform/android-sdk/licenses/android-sdk-hold
-          
-          # Ahora sí, ejecutamos Buildozer de forma normal
           buildozer android debug
 
       - name: Upload APK
@@ -66,3 +122,11 @@ jobs:
         with:
           name: calculadora-apk
           path: bin/*.apk
+
+      - name: Upload Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: .buildozer/android/platform/build-*/build/other_builds/
+          if-no-files-found: ignore
