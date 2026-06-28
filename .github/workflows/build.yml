@@ -46,13 +46,18 @@ jobs:
           SYSTEM_SDK="/usr/local/lib/android/sdk"
           SYSTEM_SDKMANAGER="${SYSTEM_SDK}/cmdline-tools/latest/bin/sdkmanager"
           
+          # 1. Aceptar licencias globales del sistema
           yes | "$SYSTEM_SDKMANAGER" --licenses || true
           
+          # 2. Crear carpetas locales de Buildozer antes de que intente compilar
           LOCAL_SDK_DIR="/home/runner/.buildozer/android/platform/android-sdk"
           mkdir -p "${LOCAL_SDK_DIR}/tools/bin"
           mkdir -p "${LOCAL_SDK_DIR}/licenses"
           
+          # 3. Inyectar las firmas de las licencias aceptadas
           cp -r ${SYSTEM_SDK}/licenses/* "${LOCAL_SDK_DIR}/licenses/" || true
+          
+          # 4. Forzar el enlace simbólico para engañar a Buildozer con las build-tools 37
           ln -s "$SYSTEM_SDKMANAGER" "${LOCAL_SDK_DIR}/tools/bin/sdkmanager" || true
 
       - name: Cache Buildozer global directory
@@ -67,10 +72,9 @@ jobs:
         run: |
           rm -rf bin
 
-      - name: Build APK with Verbose Logging
+      - name: Build APK
         run: |
-          # Ejecutamos con 'verbose' para obligar a que nos muestre exactamente qué línea de Python o librería falló
-          buildozer --verbose android debug
+          buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
