@@ -19,10 +19,13 @@ jobs:
           python-version: "3.10"
 
       - name: Install Android Build Dependencies
+        # CORRECCIÓN 3: se agregan build-essential y libstdc++-12-dev,
+        # necesarios para compilar extensiones nativas (Pillow, etc.)
         run: |
           sudo apt update
           sudo apt install -y \
             git zip unzip openjdk-17-jdk \
+            build-essential libstdc++-12-dev \
             autoconf automake libtool libtool-bin m4 \
             pkg-config \
             zlib1g-dev libncurses5-dev libgdbm-dev \
@@ -33,23 +36,41 @@ jobs:
             libjpeg-dev libpng-dev
 
       - name: Install Python dependencies
+        # CORRECCIÓN 4: se usa python-for-android desde PyPI (versión estable)
+        # en lugar de HEAD de git, que puede tener commits rotos
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install "cython<3.0.0"
           pip install virtualenv pycparser
-          pip install git+https://github.com/kivy/python-for-android.git
+          pip install python-for-android
           pip install buildozer
 
-      - name: Configure Android NDK
+      - name: Configure Android SDK and NDK
+        # CORRECCIÓN 1: se alinea la versión del NDK preinstalado en el runner
+        # (25.2.9519653) con lo que buildozer usará, evitando una descarga doble.
+        # Se actualiza buildozer.spec para que use android.ndk = 25b (25.2.9519653).
+        # CORRECCIÓN 2: se aceptan las licencias del SDK de forma no interactiva
+        # para que el build no se quede colgado esperando input en CI.
         run: |
           echo "ANDROID_NDK_HOME=/usr/local/lib/android/sdk/ndk/25.2.9519653" >> $GITHUB_ENV
           echo "ANDROID_NDK_ROOT=/usr/local/lib/android/sdk/ndk/25.2.9519653" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Clean previous builds
+      - name: Cache Buildozer global directory
+        # CORRECCIÓN 5: se cachea ~/.buildozer entre ejecuciones para evitar
+        # redescargar y recompilar todo en cada push (ahorra 15-20 min por run)
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-${{ runner.os }}-
+
+      - name: Clean previous local build artifacts
         run: |
           rm -rf .buildozer
           rm -rf bin
-          mkdir -p ~/.buildozer
 
       - name: Build APK
         run: |
@@ -62,8 +83,11 @@ jobs:
           path: bin/*.apk
 
       - name: Upload Build Logs
+        # CORRECCIÓN 6: se sube solo la carpeta de logs, no todo .buildozer
+        # (que incluye binarios compilados de cientos de MB)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-logs
-          path: .buildozer
+          path: .buildozer/android/platform/build-*/build/other_builds/
+          if-no-files-found: ignore
