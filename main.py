@@ -6,13 +6,11 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.graphics import Color, Rectangle
+from kivy.metrics import sp  # <-- IMPORTANTE: Escala los textos en móviles
 
-
+# Paleta estricta Azul y Blanco
 AZUL = (0.1, 0.4, 0.8, 1)
-PLOMO_BAJO = (0.88, 0.88, 0.88, 1)
 BLANCO = (1, 1, 1, 1)
-NEGRO = (0, 0, 0, 1)
-
 
 class Calculadora(BoxLayout):
 
@@ -20,7 +18,6 @@ class Calculadora(BoxLayout):
         super().__init__(orientation='vertical', **kwargs)
 
         self.historial = []
-        # CORRECCIÓN 1: se almacena referencia al ScreenManager desde afuera
         self.screen_manager = None
 
         with self.canvas.before:
@@ -28,20 +25,22 @@ class Calculadora(BoxLayout):
             self.rect = Rectangle(size=self.size, pos=self.pos)
         self.bind(size=self._update_rect, pos=self._update_rect)
 
+        # Pantalla principal
         self.pantalla = TextInput(
             multiline=False,
             halign="right",
-            font_size=32,
+            font_size=sp(48),  # Aumentado y escalable
             size_hint=(1, 0.2),
             background_normal='',
-            background_color=(0.95, 0.95, 0.95, 1),
-            foreground_color=NEGRO
+            background_color=BLANCO,
+            foreground_color=AZUL  # Texto azul
         )
         self.add_widget(self.pantalla)
 
+        # Botón de historial
         btn_historial = Button(
             text="Historial",
-            font_size=20,
+            font_size=sp(22),
             size_hint=(1, 0.1),
             background_normal='',
             background_color=AZUL,
@@ -62,15 +61,17 @@ class Calculadora(BoxLayout):
 
         for tecla in teclas:
             if tecla in ["C", "<-", "DEL", "/", "*", "-", "+", "=", "%"]:
+                # Operadores: Fondo azul, texto blanco
                 color_boton = AZUL
                 color_texto = BLANCO
             else:
-                color_boton = PLOMO_BAJO
-                color_texto = NEGRO
+                # Números: Fondo blanco, texto azul
+                color_boton = BLANCO
+                color_texto = AZUL
 
             btn = Button(
                 text=tecla,
-                font_size=24,
+                font_size=sp(34),  # Tamaño de botones mucho más grande para el tacto
                 background_normal='',
                 background_color=color_boton,
                 color=color_texto
@@ -85,14 +86,12 @@ class Calculadora(BoxLayout):
         self.rect.size = instance.size
 
     def abrir_historial(self, instance):
-        # CORRECCIÓN 1: se usa la referencia directa al ScreenManager
         if self.screen_manager:
             self.screen_manager.current = "historial"
 
     def presionar(self, instancia):
         texto = instancia.text
 
-        # CORRECCIÓN 2: "C" limpia toda la pantalla; "DEL" borra el último carácter
         if texto == "C":
             self.pantalla.text = ""
         elif texto == "DEL":
@@ -111,90 +110,3 @@ class Calculadora(BoxLayout):
         else:
             if self.pantalla.text == "Error":
                 self.pantalla.text = ""
-            self.pantalla.text += texto
-
-
-class PantallaHistorial(Screen):
-
-    def __init__(self, calculadora, **kwargs):
-        super().__init__(**kwargs)
-        self.calculadora = calculadora
-
-        with self.canvas.before:
-            Color(*BLANCO)
-            self.rect = Rectangle(size=self.size, pos=self.pos)
-        self.bind(size=self._update_rect, pos=self._update_rect)
-
-        layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
-
-        titulo = Label(
-            text="Historial",
-            font_size=28,
-            size_hint=(1, 0.15),
-            color=AZUL,
-        )
-        layout.add_widget(titulo)
-
-        # CORRECCIÓN 3: size_hint_y=1 para que el label ocupe el espacio disponible
-        self.label_historial = Label(
-            text="No hay operaciones",
-            font_size=20,
-            color=NEGRO,
-            halign="center",
-            valign="top",
-            size_hint=(1, 1),
-        )
-        self.label_historial.bind(size=self.label_historial.setter('text_size'))
-        layout.add_widget(self.label_historial)
-
-        btn_volver = Button(
-            text="Volver",
-            font_size=22,
-            size_hint=(1, 0.15),
-            background_normal='',
-            background_color=PLOMO_BAJO,
-            color=NEGRO
-        )
-        btn_volver.bind(on_press=self.volver)
-        layout.add_widget(btn_volver)
-
-        self.add_widget(layout)
-
-    def _update_rect(self, instance, value):
-        self.rect.pos = instance.pos
-        self.rect.size = instance.size
-
-    def on_pre_enter(self):
-        if self.calculadora.historial:
-            self.label_historial.text = "\n".join(
-                reversed(self.calculadora.historial)
-            )
-        else:
-            self.label_historial.text = "No hay operaciones"
-
-    def volver(self, instance):
-        self.manager.current = "calculadora"
-
-
-class CalculadoraApp(App):
-
-    def build(self):
-        sm = ScreenManager()
-        calculadora = Calculadora()
-
-        # CORRECCIÓN 1: se pasa la referencia del ScreenManager a la calculadora
-        calculadora.screen_manager = sm
-
-        pantalla_calculadora = Screen(name="calculadora")
-        pantalla_calculadora.add_widget(calculadora)
-
-        pantalla_historial = PantallaHistorial(calculadora, name="historial")
-
-        sm.add_widget(pantalla_calculadora)
-        sm.add_widget(pantalla_historial)
-
-        return sm
-
-
-if __name__ == "__main__":
-    CalculadoraApp().run()
